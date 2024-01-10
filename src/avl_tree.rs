@@ -54,6 +54,28 @@ impl<T: Ord> AvlTree<T> {
     }
 }
 
+impl<'a, T: 'a + Ord> AvlTree<T> {
+    fn iter(&'a self) -> AvlTreeIterator<'a, T> {
+        AvlTreeIterator {
+            prev_nodes: Vec::new(),
+            current_tree: &self.root,
+        }
+    }
+}
+
+pub struct AvlTreeIterator<'a, T: Ord> {
+    prev_nodes: Vec<&'a AvlTreeNode<T>>,
+    current_tree: &'a AvlTreeRef<T>
+}
+
+impl<'a, T: 'a + Ord> Iterator for AvlTreeIterator<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
