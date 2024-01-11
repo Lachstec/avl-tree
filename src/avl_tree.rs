@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::cmp::Ordering;
+use std::cmp::{Ordering, max};
 use std::iter::FromIterator;
 
 type AvlTreeRef<T> = Option<Box<AvlTreeNode<T>>>;
@@ -9,6 +9,7 @@ struct AvlTreeNode<T: Ord> {
     pub data: T,
     left: AvlTreeRef<T>,
     right: AvlTreeRef<T>,
+    height: usize,
 }
 
 impl<T: Ord> AvlTreeNode<T> {
@@ -17,6 +18,7 @@ impl<T: Ord> AvlTreeNode<T> {
             data: value,
             left: None,
             right: None,
+            height: 0,
         }
     }
 
@@ -26,6 +28,18 @@ impl<T: Ord> AvlTreeNode<T> {
 
     pub fn set_right(&mut self, node: AvlTreeNode<T>) {
         self.right = Some(Box::new(node));
+    }
+
+    fn update_height(&mut self) {
+        self.height = 1 + max(self.left_height(), self.right_height());
+    }
+
+    fn left_height(&self) -> usize {
+        self.left.as_ref().map_or(0, |left| left.height)
+    }
+
+    fn right_height(&self) -> usize {
+        self.left.as_ref().map_or(0, |right| right.height)
     }
 }
 
@@ -41,17 +55,22 @@ impl<T: Ord> AvlTree<T> {
     }
 
     pub fn insert(&mut self, value: T) {
+        let mut previous_nodes = Vec::<*mut AvlTreeNode<T>>::new();
         let mut current_subtree = &mut self.root;
 
         while let Some(node) = current_subtree {
+            previous_nodes.push(&mut **node);
             match node.data.cmp(&value) {
                 Ordering::Greater => current_subtree = &mut node.left,
                 Ordering::Equal => return,
                 Ordering::Less => current_subtree = &mut node.right,
             }
         }
-
-        *current_subtree = Some(Box::new(AvlTreeNode::new(value)))
+        *current_subtree = Some(Box::new(AvlTreeNode::new(value)));
+        for node_ptr in previous_nodes.into_iter().rev() {
+            let node = unsafe { &mut *node_ptr };
+            node.update_height();
+        }
     }
 }
 
@@ -135,8 +154,10 @@ mod tests {
                     data: 12,
                     left: None,
                     right: None,
+                    height: 0,
                 })),
-                right: None
+                right: None,
+                height: 1
             }))
         )
     }
