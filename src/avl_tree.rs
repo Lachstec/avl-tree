@@ -72,7 +72,33 @@ impl<'a, T: 'a + Ord> Iterator for AvlTreeIterator<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unimplemented!()
+        loop {
+            match *self.current_tree {
+                None => match self.prev_nodes.pop() {
+                    None => return None,
+                    Some(ref prev_node) => {
+                        self.current_tree = &prev_node.right;
+                        return Some(&prev_node.data)
+                    }
+                },
+                Some(ref current_node) => {
+                    if current_node.left.is_some() {
+                        self.prev_nodes.push(&current_node);
+                        self.current_tree = &current_node.left;
+
+                        continue;
+                    }
+
+                    if current_node.right.is_some() {
+                        self.current_tree = &current_node.right;
+                        return Some(&current_node.data)
+                    }
+
+                    self.current_tree = &None;
+                    return Some(&current_node.data)
+                }
+            }
+        }
     }
 }
 
@@ -100,5 +126,18 @@ mod tests {
                 right: None
             }))
         )
+    }
+
+    #[test]
+    fn iterator() {
+        let mut tree: AvlTree<u32> = AvlTree::new();
+        tree.insert(3);
+        tree.insert(2);
+        tree.insert(1);
+
+        let mut iter = tree.iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
     }
 }
