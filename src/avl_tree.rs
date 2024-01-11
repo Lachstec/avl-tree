@@ -1,5 +1,6 @@
 #![allow(unused)]
 use std::cmp::Ordering;
+use std::iter::FromIterator;
 
 type AvlTreeRef<T> = Option<Box<AvlTreeNode<T>>>;
 
@@ -99,6 +100,18 @@ impl<'a, T: 'a + Ord> Iterator for AvlTreeIterator<'a, T> {
                 }
             }
         }
+    }
+}
+
+impl<T: Ord> FromIterator<T> for AvlTree<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut tree = Self::new();
+
+        for elem in iter {
+            tree.insert(elem);
+        }
+
+        tree
     }
 }
 
