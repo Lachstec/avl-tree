@@ -72,6 +72,58 @@ impl<T: Ord> AvlTree<T> {
     }
 }
 
+pub struct Iter<'a, T: Ord> {
+    prev_nodes: Vec<&'a NonNull<AvlTreeNode<T>>>,
+    current_subtree: &'a Link<T>,
+}
+
+impl<'a, T: Ord + 'a> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match *self.current_subtree {
+                None => {
+                    match self.prev_nodes.pop() {
+                        None => return None,
+                        Some(ref prev_node) => {
+                            unsafe {
+                                let prev_node = prev_node.as_ptr() ;
+                                self.current_subtree = &(*prev_node).right;
+                                return Some(&(*prev_node).data);
+                            }
+                        }
+                    }
+                },
+                Some(ref current_node) => {
+                    unsafe {
+                        if (*current_node.as_ptr()).left.is_some() {
+                            self.prev_nodes.push(&current_node);
+                            self.current_subtree = &(*current_node.as_ptr()).left;
+                        }
+
+                        if (*current_node.as_ptr()).right.is_some() {
+                            self.current_subtree = &(*current_node.as_ptr()).right;
+                            return Some(&(*current_node.as_ptr()).data)
+                        }
+                        self.current_subtree = &None;
+                        return Some(&(*current_node.as_ptr()).data)
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl<'a, T: Ord + 'a> AvlTree<T> {
+    fn iter(&'a self) -> Iter<T> {
+        Iter {
+            prev_nodes: Vec::new(),
+            current_subtree: &self.root,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,6 +134,9 @@ mod tests {
         assert!(tree.insert(1));
         assert!(!tree.insert(1));
         assert!(tree.insert(2));
-        // TODO: Test if tree contains elements as expected
+        
+        let mut iter = tree.iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
     }
 }
