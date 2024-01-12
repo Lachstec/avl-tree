@@ -1,80 +1,60 @@
 #![allow(dead_code)]
-use std::{ptr::NonNull, marker::PhantomData};
-use std::cmp::{max, Ordering};
-
-type Link<T> = Option<NonNull<AvlTreeNode<T>>>;
+use std::cmp::Ordering;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AvlTreeNode<T: Ord> {
-    pub data: T,
-    pub left: Link<T>,
-    pub right: Link<T>,
-    pub parent: Link<T>,
-    pub height: usize,
+pub struct Node<T: Ord> {
+    value: T,
+    left: Link<T>,
+    right: Link<T>,
 }
 
-impl<T: Ord> AvlTreeNode<T> {
-    pub fn update_height(&mut self) {
-        let left_height = self.left.as_ref().map_or(0, |left| unsafe { (*left.as_ptr()).height });
-        let right_height = self.right.as_ref().map_or(0, |right| unsafe { (*right.as_ptr()).height });
+type Link<T> = Option<Box<Node<T>>>;
 
-        self.height = 1 + max(left_height, right_height);
-    }
-
-    pub fn balance_factor(&mut self) -> usize {
-        let left_height = self.left
-            .as_ref()
-            .map_or(0, |left| unsafe { (*left.as_ptr()).height });
-        let right_height = self.right
-            .as_ref()
-            .map_or(0, |right| unsafe { (*right.as_ptr()).height });
-
-        right_height - left_height
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AvlTree<T: Ord> {
     root: Link<T>,
-    _marker: PhantomData<T>,
 }
 
 impl<T: Ord> AvlTree<T> {
     pub fn new() -> Self {
         Self {
             root: None,
-            _marker: PhantomData,
         }
     }
 
-    pub fn insert(&mut self, data: T) -> bool {
-        unsafe {
-            let mut current_node = &mut self.root;
-            while let Some(node_ptr) = current_node {
-                let node = &mut (*node_ptr.as_ptr());
-                match node.data.cmp(&data){
-                    Ordering::Greater => current_node = &mut node.left,
-                    Ordering::Equal => return false,
-                    Ordering::Less => current_node = &mut node.right,
-                }
+    pub fn insert(&mut self, value: T) -> bool {
+        let mut current_tree = &mut self.root;
+
+        while let Some(current_node) = current_tree {
+            match current_node.value.cmp(&value) {
+                Ordering::Greater => current_tree = &mut current_node.left,
+                Ordering::Equal => return false,
+                Ordering::Less => current_tree = &mut current_node.right,
             }
-            let new = NonNull::new_unchecked(Box::into_raw(Box::new(AvlTreeNode {
-                data,
-                left: None,
-                right: None,
-                parent: None,
-                height: 0
-            })));
-            //TODO: Set parent as needed.
-            *current_node = Some(new);
-            true
         }
+
+        *current_tree = Some(Box::new(Node {
+            value,
+            left: None,
+            right: None,
+        }));
+
+        true
     }
 }
 
+impl<'a, T: Ord + 'a> AvlTree<T> {
+    pub fn iter(&'a self) -> Iter<'a, T> {
+        Iter {
+            prev_nodes: Vec::new(),
+            current_tree: &self.root,
+        }
+    } 
+}
+
 pub struct Iter<'a, T: Ord> {
-    prev_nodes: Vec<&'a NonNull<AvlTreeNode<T>>>,
-    current_subtree: &'a Link<T>,
+    prev_nodes: Vec<&'a Node<T>>,
+    current_tree: &'a Link<T>,
 }
 
 impl<'a, T: Ord + 'a> Iterator for Iter<'a, T> {
@@ -82,61 +62,79 @@ impl<'a, T: Ord + 'a> Iterator for Iter<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match *self.current_subtree {
-                None => {
-                    match self.prev_nodes.pop() {
-                        None => return None,
-                        Some(ref prev_node) => {
-                            unsafe {
-                                let prev_node = prev_node.as_ptr() ;
-                                self.current_subtree = &(*prev_node).right;
-                                return Some(&(*prev_node).data);
-                            }
-                        }
+            match *self.current_tree {
+                None => match self.prev_nodes.pop() {
+                    None => return None,
+                    Some(ref prev_node) => {
+                        self.current_tree = &prev_node.right;
+                        return Some(&prev_node.value);
                     }
                 },
                 Some(ref current_node) => {
-                    unsafe {
-                        if (*current_node.as_ptr()).left.is_some() {
-                            self.prev_nodes.push(&current_node);
-                            self.current_subtree = &(*current_node.as_ptr()).left;
-                        }
+                    if current_node.left.is_some() {
+                        self.prev_nodes.push(&current_node);
+                        self.current_tree = &current_node.left;
 
-                        if (*current_node.as_ptr()).right.is_some() {
-                            self.current_subtree = &(*current_node.as_ptr()).right;
-                            return Some(&(*current_node.as_ptr()).data)
-                        }
-                        self.current_subtree = &None;
-                        return Some(&(*current_node.as_ptr()).data)
+                        continue;
                     }
+                    if current_node.right.is_some() {
+                        self.current_tree = &current_node.right;
+                        return Some(&current_node.value);
+                    }
+                    self.current_tree = &None;
+                    return Some(&current_node.value)
                 }
             }
         }
     }
 }
 
-impl<'a, T: Ord + 'a> AvlTree<T> {
-    fn iter(&'a self) -> Iter<T> {
-        Iter {
-            prev_nodes: Vec::new(),
-            current_subtree: &self.root,
+impl<T: Ord> FromIterator<T> for AvlTree<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut tree = Self::new();
+        for value in iter {
+            tree.insert(value);
         }
+        tree
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod avl_tree_tests {
     use super::*;
 
     #[test]
-    fn simple_insert() {
-        let mut tree: AvlTree<i32> = AvlTree::new();
+    fn insert() {
+        let mut tree = AvlTree::new();
         assert!(tree.insert(1));
         assert!(!tree.insert(1));
         assert!(tree.insert(2));
-        
-        let mut iter = tree.iter();
-        assert_eq!(iter.next(), Some(&1));
-        assert_eq!(iter.next(), Some(&2));
+
+        assert_eq!(tree.root, Some(Box::new(
+            Node {
+                value: 1,
+                left: None,
+                right: Some(Box::new(
+                    Node {
+                        value: 2,
+                        left: None,
+                        right: None,
+                    }
+                ))
+            }
+        )));
+    }
+
+    #[test]
+    fn iter() {
+        let mut tree = AvlTree::new();
+        tree.insert(4);
+        tree.insert(3);
+        tree.insert(2);
+        tree.insert(1);
+
+        for (expected, actual) in tree.iter().enumerate() {
+            assert_eq!(&((expected + 1) as i32 ), actual)
+        }
     }
 }
