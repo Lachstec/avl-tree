@@ -89,6 +89,37 @@ impl<T: Ord> Node<T> {
 
         true
     }
+
+    fn rebalance(&mut self) -> bool {
+        match self.balance_factor() {
+            -2 => {
+                // currently node is right-heavy
+                let right_node = self.right.as_mut().unwrap();
+                
+                // inner node is currently left-heavy
+                if right_node.balance_factor() == 1 {
+                    right_node.rotate_right();
+                }
+
+                self.rotate_left();
+                true
+            },
+            2 => {
+                // currently node is left-heavy
+                let left_node = self.left.as_mut().unwrap();
+
+                // inner node is currentyl right-heavy
+                if left_node.balance_factor() == -1 {
+                    left_node.rotate_left();
+                }
+
+                self.rotate_right();
+
+                true
+            },
+            _ => false
+        }
+    }
 }
 
 type Link<T> = Option<Box<Node<T>>>;
@@ -126,7 +157,8 @@ impl<T: Ord> AvlTree<T> {
         }));
 
         for ptr in prev_ptrs.into_iter().rev() {
-            unsafe {(*ptr).update_height()}
+            unsafe {(*ptr).update_height(); }
+            unsafe { (*ptr).rebalance(); }
         }
 
         true
@@ -346,5 +378,10 @@ mod avl_tree_tests {
         }
 
         TestResult::from_bool(rotated == tree)
+    }
+
+    #[quickcheck]
+    fn autobalancing(tree: AvlTree<u16>) -> bool {
+        itertools::all(tree.node_iter(), |node| node.balance_factor().abs() < 2)
     }
 }
