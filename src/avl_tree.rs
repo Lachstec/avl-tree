@@ -4,28 +4,38 @@ use std::mem;
 #[cfg(test)]
 use quickcheck::{Arbitrary, Gen};
 
+/// Represents a single node in an avl tree
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node<T: Ord> {
+    /// value stored in the node
     value: T,
+    /// left subtree connected to this node
     left: Link<T>,
+    /// right subtree connected to this node
     right: Link<T>,
 
+    /// height of the node
     height: usize,
 }
 
 impl<T: Ord> Node<T> {
+    /// Retrieves the height of the left subtree if it exists, else returns 0.
     fn left_height(&self) -> usize {
         self.left.as_ref().map_or(0, |left| left.height)
     }
 
+    /// Retrieves the height of the right subtree if it exists, else returns 0.
     fn right_height(&self) -> usize {
         self.right.as_ref().map_or(0, |right| right.height)
     }
 
+    /// Updates the height of a node by setting it equal to 1 + the greater height of 
+    /// its children.
     fn update_height(&mut self) {
         self.height = 1 + std::cmp::max(self.left_height(), self.right_height())
     }
 
+    /// Computes the balance factor as defined for an [avl tree](https://en.wikipedia.org/wiki/AVL_tree#Definition).
     fn balance_factor(&self) -> i8 {
         let left_height = self.left_height();
         let right_height = self.right_height();
@@ -37,6 +47,7 @@ impl<T: Ord> Node<T> {
         }
     }
  
+    /// Performs a right rotation of the current node and its children as specified for avl trees.
     fn rotate_right(&mut self) -> bool {
         let left_node = match &self.left {
             None => return false,
@@ -63,6 +74,7 @@ impl<T: Ord> Node<T> {
         true
     }
 
+    /// Performs a left rotation of this node and its children as specified for avl trees.
     fn rotate_left(&mut self) -> bool {
         if self.right.is_none() {
             return false;
@@ -90,6 +102,7 @@ impl<T: Ord> Node<T> {
         true
     }
 
+    /// Rebalances the current node to restore the avl critirium after an insertion.
     fn rebalance(&mut self) -> bool {
         match self.balance_factor() {
             -2 => {
@@ -122,20 +135,27 @@ impl<T: Ord> Node<T> {
     }
 }
 
+/// A link between nodes in a tree.
 type Link<T> = Option<Box<Node<T>>>;
 
+/// Generic AvlTree implementation that permits no duplicate entries.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AvlTree<T: Ord> {
     root: Link<T>,
 }
 
 impl<T: Ord> AvlTree<T> {
+    /// Create a new AvlTree instance
     pub fn new() -> Self {
         Self {
             root: None,
         }
     }
 
+    /// Try to insert the value into the tree. Returns true on success, else false.
+    /// 
+    /// ## Arguments
+    /// * `value` - Value to insert into the tree
     pub fn insert(&mut self, value: T) -> bool {
         let mut current_tree = &mut self.root;
         let mut prev_ptrs = Vec::<*mut Node<T>>::new();
@@ -166,10 +186,14 @@ impl<T: Ord> AvlTree<T> {
 }
 
 impl<'a, T: Ord + 'a> AvlTree<T> {
+    /// Returns an iterator over the values in the tree. 
+    /// The iterator performs an in-order depth traversal of the tree.
     pub fn iter(&'a self) -> impl Iterator<Item = &'a T> + 'a {
         self.node_iter().map(|node| &node.value)
     }
 
+    /// Returns an iterator over the actual nodes in the tree.
+    /// The iterator performs an in-order depth traversal of the tree.
     pub fn node_iter(&'a self) -> impl Iterator<Item = &'a Node<T>> + 'a {
         NodeIter {
             prev_nodes: Vec::new(),
