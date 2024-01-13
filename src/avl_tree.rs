@@ -177,8 +177,11 @@ impl<T: Ord> AvlTree<T> {
         }));
 
         for ptr in prev_ptrs.into_iter().rev() {
-            unsafe {(*ptr).update_height(); }
-            unsafe { (*ptr).rebalance(); }
+            unsafe {
+                let node = &mut *ptr;
+                node.update_height();
+                node.rebalance();
+            }
         }
 
         true
