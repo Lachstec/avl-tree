@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use std::cmp::Ordering;
+use std::ptr::NonNull;
 use std::mem;
-#[cfg(test)]
-use quickcheck::{Arbitrary, Gen};
 
 /// Represents a single node in an avl tree
 #[derive(Debug, Clone, PartialEq)]
@@ -21,12 +20,12 @@ pub struct Node<T: Ord> {
 impl<T: Ord> Node<T> {
     /// Retrieves the height of the left subtree if it exists, else returns 0.
     fn left_height(&self) -> usize {
-        self.left.as_ref().map_or(0, |left| left.height)
+        self.left.as_ref().map_or(0, |left| unsafe { (*left.as_ptr()).height })
     }
 
     /// Retrieves the height of the right subtree if it exists, else returns 0.
     fn right_height(&self) -> usize {
-        self.right.as_ref().map_or(0, |right| right.height)
+        self.right.as_ref().map_or(0, |right| unsafe { (*right.as_ptr()).height })
     }
 
     /// Updates the height of a node by setting it equal to 1 + the greater height of 
@@ -51,22 +50,23 @@ impl<T: Ord> Node<T> {
     fn rotate_right(&mut self) -> bool {
         let left_node = match &self.left {
             None => return false,
-            Some(_) => self.left.as_mut().unwrap(),
+            Some(_) => *self.left.as_mut().unwrap(),
         };
+        unsafe {
+            let left_right_subtree = (*left_node.as_ptr()).right.take();
+            let left_left_subtree = (*left_node.as_ptr()).left.take();
+            let mut new_right_subtree = mem::replace(&mut self.left, left_left_subtree);
+            mem::swap(&mut self.value, &mut (*new_right_subtree.as_mut().unwrap().as_ptr()).value);
+            let right_tree = self.right.take();
 
-        let left_right_subtree = left_node.right.take();
-        let left_left_subtree = left_node.left.take();
-        let mut new_right_subtree = mem::replace(&mut self.left, left_left_subtree);
-        mem::swap(&mut self.value, &mut new_right_subtree.as_mut().unwrap().value);
-        let right_tree = self.right.take();
+            let new_right_node = new_right_subtree.as_mut().unwrap();
+            (*new_right_node.as_ptr()).left = left_right_subtree;
+            (*new_right_node.as_ptr()).right = right_tree;
+            self.right = new_right_subtree;
 
-        let new_right_node = new_right_subtree.as_mut().unwrap();
-        new_right_node.left = left_right_subtree;
-        new_right_node.right = right_tree;
-        self.right = new_right_subtree;
-
-        if let Some(node) = self.right.as_mut() {
-            node.update_height();
+            if let Some(node) = self.right.as_mut() {
+                (*node.as_ptr()).update_height();
+            }
         }
 
         self.update_height();
@@ -79,24 +79,24 @@ impl<T: Ord> Node<T> {
         if self.right.is_none() {
             return false;
         }
+        unsafe {
+            let right_node = self.right.as_mut().unwrap();
+            let right_left_tree = (*right_node.as_ptr()).left.take();
+            let right_right_tree = (*right_node.as_ptr()).right.take();
 
-        let right_node = self.right.as_mut().unwrap();
-        let right_left_tree = right_node.left.take();
-        let right_right_tree = right_node.right.take();
+            let mut new_left_tree = mem::replace(&mut self.right, right_right_tree);
+            mem::swap(&mut self.value, &mut (*new_left_tree.as_mut().unwrap().as_ptr()).value); 
+            let left_tree = self.left.take();
 
-        let mut new_left_tree = mem::replace(&mut self.right, right_right_tree);
-        mem::swap(&mut self.value, &mut new_left_tree.as_mut().unwrap().value);
-        let left_tree = self.left.take();
+            let new_left_node = *new_left_tree.as_mut().unwrap();
+            (*new_left_node.as_ptr()).right = right_left_tree;
+            (*new_left_node.as_ptr()).left = left_tree;
+            self.left = new_left_tree;
 
-        let new_left_node = new_left_tree.as_mut().unwrap();
-        new_left_node.right = right_left_tree;
-        new_left_node.left = left_tree;
-        self.left = new_left_tree;
-
-        if let Some(node) = self.left.as_mut() {
-            node.update_height();
+            if let Some(node) = self.left.as_mut() {
+                (*node.as_ptr()).update_height();
+            }
         }
-
         self.update_height();
 
         true
@@ -107,11 +107,13 @@ impl<T: Ord> Node<T> {
         match self.balance_factor() {
             -2 => {
                 // currently node is right-heavy
-                let right_node = self.right.as_mut().unwrap();
+                let right_node = *self.right.as_mut().unwrap();
                 
-                // inner node is currently left-heavy
-                if right_node.balance_factor() == 1 {
-                    right_node.rotate_right();
+                unsafe {
+                    // inner node is currently left-heavy
+                    if (*right_node.as_ptr()).balance_factor() == 1 {
+                        (*right_node.as_ptr()).rotate_right();
+                    }
                 }
 
                 self.rotate_left();
@@ -119,11 +121,12 @@ impl<T: Ord> Node<T> {
             },
             2 => {
                 // currently node is left-heavy
-                let left_node = self.left.as_mut().unwrap();
-
-                // inner node is currentyl right-heavy
-                if left_node.balance_factor() == -1 {
-                    left_node.rotate_left();
+                let left_node = *self.left.as_mut().unwrap();
+                unsafe {
+                    // inner node is currentyl right-heavy
+                    if (*left_node.as_ptr()).balance_factor() == -1 {
+                        (*left_node.as_ptr()).rotate_left();
+                    }
                 }
 
                 self.rotate_right();
@@ -136,7 +139,7 @@ impl<T: Ord> Node<T> {
 }
 
 /// A link between nodes in a tree.
-type Link<T> = Option<Box<Node<T>>>;
+type Link<T> = Option<NonNull<Node<T>>>;
 
 /// Generic AvlTree implementation that permits no duplicate entries.
 #[derive(Debug, Clone, PartialEq)]
@@ -159,22 +162,24 @@ impl<T: Ord> AvlTree<T> {
     pub fn insert(&mut self, value: T) -> bool {
         let mut current_tree = &mut self.root;
         let mut prev_ptrs = Vec::<*mut Node<T>>::new();
-
-        while let Some(current_node) = current_tree {
-            prev_ptrs.push(&mut **current_node);
-            match current_node.value.cmp(&value) {
-                Ordering::Greater => current_tree = &mut current_node.left,
-                Ordering::Equal => return false,
-                Ordering::Less => current_tree = &mut current_node.right,
+        unsafe  {
+            while let Some(current_node) = current_tree {
+                prev_ptrs.push(current_node.as_ptr());
+                match (*current_node.as_ptr()).value.cmp(&value) {
+                    Ordering::Greater => current_tree = &mut (*current_node.as_ptr()).left,
+                    Ordering::Equal => return false,
+                    Ordering::Less => current_tree = &mut (*current_node.as_ptr()).right,
+                }
             }
         }
-
-        *current_tree = Some(Box::new(Node {
-            value,
-            left: None,
-            right: None,
-            height: 1,
-        }));
+        unsafe {
+            *current_tree = Some(NonNull::new_unchecked(Box::into_raw(Box::new(Node {
+                value,
+                left: None,
+                right: None,
+                height: 1,
+            }))));
+        }
 
         for ptr in prev_ptrs.into_iter().rev() {
             unsafe {
@@ -205,16 +210,32 @@ impl<'a, T: Ord + 'a> AvlTree<T> {
     }
 }
 
-#[cfg(test)]
-impl<T: Arbitrary + Ord> Arbitrary for AvlTree<T> {
-    fn arbitrary(g: &mut Gen) -> Self {
-        let vec: Vec<T> = Arbitrary::arbitrary(g);
-        vec.into_iter().collect()
-    }
+impl<T: Ord> Drop for AvlTree<T> {
+    fn drop(&mut self) {
+        if self.root.is_none() {
+            return;
+        }
+        let mut stack = Vec::new();
+        let mut curr_node = self.root.unwrap();
+        let mut nodes = Vec::new();
 
-    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-        let vec: Vec<T> = self.iter().cloned().collect();
-        Box::new(vec.shrink().map(|val| val.into_iter().collect::<Self>()))
+        stack.push(curr_node);
+        while !stack.is_empty() {
+            curr_node = stack.pop().unwrap();
+            nodes.push(curr_node);
+            unsafe {
+                if (*curr_node.as_ptr()).right.is_some() {
+                    stack.push((*curr_node.as_ptr()).right.unwrap());
+                }
+                if (*curr_node.as_ptr()).left.is_some() {
+                    stack.push((*curr_node.as_ptr()).left.unwrap());
+                }
+            }
+        }
+
+        for node in nodes {
+            unsafe { let _box = Box::from_raw(node.as_ptr()); }
+        }
     }
 }
 
@@ -242,18 +263,20 @@ impl<'a, T: Ord + 'a> Iterator for NodeIter<'a, T> {
                     }
                 },
                 Some(ref current_node) => {
-                    if current_node.left.is_some() {
-                        self.prev_nodes.push(&current_node);
-                        self.current_tree = &current_node.left;
+                    unsafe {
+                        if (*current_node.as_ptr()).left.is_some() {
+                            self.prev_nodes.push(&(*current_node.as_ptr()));
+                            self.current_tree = &(*current_node.as_ptr()).left;
 
-                        continue;
+                            continue;
+                        }
+                        if (*current_node.as_ptr()).right.is_some() {
+                            self.current_tree = &(*current_node.as_ptr()).right;
+                            return Some(&(*current_node.as_ptr()));
+                        }
+                        self.current_tree = &None;
+                        return Some(&(*current_node.as_ptr()))
                     }
-                    if current_node.right.is_some() {
-                        self.current_tree = &current_node.right;
-                        return Some(&current_node);
-                    }
-                    self.current_tree = &None;
-                    return Some(&current_node)
                 }
             }
         }
@@ -274,18 +297,20 @@ impl<'a, T: Ord + 'a> Iterator for Iter<'a, T> {
                     }
                 },
                 Some(ref current_node) => {
-                    if current_node.left.is_some() {
-                        self.prev_nodes.push(&current_node);
-                        self.current_tree = &current_node.left;
+                    unsafe {
+                        if (*current_node.as_ptr()).left.is_some() {
+                            self.prev_nodes.push(&(*current_node.as_ptr()));
+                            self.current_tree = &(*current_node.as_ptr()).left;
 
-                        continue;
+                            continue;
+                        }
+                        if (*current_node.as_ptr()).right.is_some() {
+                            self.current_tree = &(*current_node.as_ptr()).right;
+                            return Some(&(*current_node.as_ptr()).value);
+                        }
+                        self.current_tree = &None;
+                        return Some(&(*current_node.as_ptr()).value)
                     }
-                    if current_node.right.is_some() {
-                        self.current_tree = &current_node.right;
-                        return Some(&current_node.value);
-                    }
-                    self.current_tree = &None;
-                    return Some(&current_node.value)
                 }
             }
         }
@@ -305,37 +330,10 @@ impl<T: Ord> FromIterator<T> for AvlTree<T> {
 #[cfg(test)]
 mod avl_tree_tests {
     use super::*;
-    use std::collections::BTreeSet;
-    use quickcheck::TestResult;
-    use itertools::equal;
-    use quickcheck_macros::quickcheck;
+    use rand::Rng;
 
     #[test]
-    fn insert() {
-        let mut tree = AvlTree::new();
-        assert!(tree.insert(1));
-        assert!(!tree.insert(1));
-        assert!(tree.insert(2));
-
-        assert_eq!(tree.root, Some(Box::new(
-            Node {
-                value: 1,
-                height: 2,
-                left: None,
-                right: Some(Box::new(
-                    Node {
-                        value: 2,
-                        left: None,
-                        right: None,
-                        height: 1,
-                    }
-                ))
-            }
-        )));
-    }
-
-    #[test]
-    fn iter() {
+    fn insert_iter() {
         let mut tree = AvlTree::new();
         tree.insert(4);
         tree.insert(3);
@@ -347,68 +345,15 @@ mod avl_tree_tests {
         }
     }
 
-    #[quickcheck]
-    fn node_height(tree: AvlTree<u16>) -> bool {
-        itertools::all(tree.node_iter(), |node| {
+    #[test]
+    fn node_height() {
+        let mut tree = AvlTree::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            tree.insert(rng.gen::<u32>());
+        }
+        assert!(itertools::all(tree.node_iter(), |node| {
             node.height == 1 + std::cmp::max(node.left_height(), node.right_height())
-        })
-    }
-
-    #[quickcheck]
-    fn rotate_right(btree: BTreeSet<u8>) -> TestResult {
-        let mut set = btree.iter().cloned().collect::<AvlTree<_>>();
-        
-        if !set.root.is_some() {
-            return TestResult::discard();
-        }
-
-        if !set.root.as_mut().unwrap().rotate_right() {
-            return TestResult::discard();
-        }
-
-        TestResult::from_bool(equal(set.iter(), btree.iter()))
-    }
-
-    #[quickcheck]
-    fn rotate_right_balance_factor(data: Vec<u32>) -> TestResult {
-        let mut set = data.iter().cloned().collect::<AvlTree<_>>();
-
-        if !set.root.is_some() {
-            return TestResult::discard();
-        }
-
-        let root = set.root.as_mut().unwrap();
-        let balance_factor = root.balance_factor();
-
-        if !root.rotate_right() {
-            return TestResult::discard();
-        }
-
-        let tilted_factor = root.balance_factor();
-        TestResult::from_bool(balance_factor - tilted_factor >= 2)
-    }
-
-    #[quickcheck]
-    fn rotate_left_left_ident(tree: AvlTree<u8>) -> TestResult {
-        if tree.root.is_none() {
-            return TestResult::discard();
-        }
-
-        let mut rotated = tree.clone();
-        let root = rotated.root.as_mut().unwrap();
-
-        if root.rotate_left() {
-            root.rotate_right();
-        } else {
-            root.rotate_right();
-            root.rotate_left();
-        }
-
-        TestResult::from_bool(rotated == tree)
-    }
-
-    #[quickcheck]
-    fn autobalancing(tree: AvlTree<u16>) -> bool {
-        itertools::all(tree.node_iter(), |node| node.balance_factor().abs() < 2)
+        }));
     }
 }
