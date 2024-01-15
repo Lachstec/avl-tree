@@ -219,7 +219,7 @@ impl<T: Ord> AvlTree<T> {
 }
 
 impl<'a, T: Ord + 'a> AvlTree<T> {
-    /// Returns an iterator over the values in the tree. 
+    /// Returns an iterator over the borrowed values in the tree. 
     /// The iterator performs an in-order depth traversal of the tree.
     pub fn iter(&'a self) -> impl Iterator<Item = &'a T> + 'a {
         self.node_iter().map(|node| &node.value)
