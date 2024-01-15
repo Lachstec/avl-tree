@@ -221,7 +221,75 @@ impl<T: Ord + Display> AvlTree<T> {
         self.iter().count()
     }
 
-    
+    /// Return a graphviz dotfile representation of the AvlTree.
+    pub fn as_dotfile(&self) -> Option<String> {
+        if self.root.is_some() {
+            unsafe {
+                let mut graph = Graph::DiGraph { id: Id::Plain(String::from("AVL_Tree")), strict: true, stmts: Vec::new() };
+                let mut queue = VecDeque::new();
+                queue.push_back(self.root.unwrap());
+                while !queue.is_empty() {
+                    let node = queue.pop_front().unwrap();
+                    graph.add_stmt(
+                        Stmt::Node(
+                            Node::new(NodeId { 0: Id::Plain((*node.as_ptr()).value.to_string()), 1: None}, Vec::new())
+                        )
+                    );
+                    if (*node.as_ptr()).left.is_some() {
+                        queue.push_back((*node.as_ptr()).left.unwrap());
+                        graph.add_stmt(
+                            Stmt::Edge(
+                                Edge { 
+                                    ty: EdgeTy::Pair(
+                                        Vertex::N(
+                                            NodeId {
+                                               0: Id::Plain((*node.as_ptr()).value.to_string()),
+                                               1: None,
+                                            }
+                                        ),
+                                        Vertex::N(
+                                            NodeId {
+                                               0: Id::Plain((*(*node.as_ptr()).left.unwrap().as_ptr()).value.to_string()),
+                                               1: None,
+                                            }
+                                        ),
+                                    ), 
+                                    attributes: Vec::new()
+                                }
+                            )
+                        );
+                    }
+                    if (*node.as_ptr()).right.is_some() {
+                        queue.push_back((*node.as_ptr()).right.unwrap());
+                        graph.add_stmt(
+                            Stmt::Edge(
+                                Edge { 
+                                    ty: EdgeTy::Pair(
+                                        Vertex::N(
+                                            NodeId {
+                                               0: Id::Plain((*node.as_ptr()).value.to_string()),
+                                               1: None,
+                                            }
+                                        ),
+                                        Vertex::N(
+                                            NodeId {
+                                               0: Id::Plain((*(*node.as_ptr()).right.unwrap().as_ptr()).value.to_string()),
+                                               1: None,
+                                            }
+                                        ),
+                                    ), 
+                                    attributes: Vec::new()
+                                }
+                            )
+                        );
+                    }
+                }
+                Some(graph.print(&mut PrinterContext::default()))
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a, T: Ord + Display + 'a> AvlTree<T> {
