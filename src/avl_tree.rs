@@ -2,6 +2,7 @@
 use std::cmp::Ordering;
 use std::ptr::NonNull;
 use std::mem;
+use std::default::Default;
 
 /// Represents a single node in an avl tree
 #[derive(Debug, Clone, PartialEq)]
@@ -12,7 +13,6 @@ pub struct Node<T: Ord> {
     left: Link<T>,
     /// right subtree connected to this node
     right: Link<T>,
-
     /// height of the node
     height: usize,
 }
@@ -191,6 +191,26 @@ impl<T: Ord> AvlTree<T> {
 
         true
     }
+
+    /// Checks if the AvlTree contains the value T.
+    /// 
+    /// ## Arguments
+    /// * `value` The value to check
+    /// ## Returns
+    /// `true`, when `value` is in the AvlTree, else `false``.
+    pub fn contains(&self, value: &T) -> bool {
+        let mut current_tree = &self.root;
+        while let Some(node) = current_tree {
+            unsafe {
+                match (*node.as_ptr()).value.cmp(value) {
+                    Ordering::Greater => current_tree = &(*node.as_ptr()).left,
+                    Ordering::Equal => return true,
+                    Ordering::Less => current_tree = &(*node.as_ptr()).right,
+                }
+            }
+        }
+        false
+    }
 }
 
 impl<'a, T: Ord + 'a> AvlTree<T> {
@@ -235,6 +255,14 @@ impl<T: Ord> Drop for AvlTree<T> {
 
         for node in nodes {
             unsafe { let _box = Box::from_raw(node.as_ptr()); }
+        }
+    }
+}
+
+impl<T: Ord> Default for AvlTree<T> {
+    fn default() -> Self {
+        Self {
+            root: None,
         }
     }
 }
@@ -330,7 +358,9 @@ impl<T: Ord> FromIterator<T> for AvlTree<T> {
 #[cfg(test)]
 mod avl_tree_tests {
     use super::*;
+    use itertools::Itertools;
     use rand::Rng;
+    use std::collections::BTreeSet;
 
     #[test]
     fn insert_iter() {
@@ -355,5 +385,41 @@ mod avl_tree_tests {
         assert!(itertools::all(tree.node_iter(), |node| {
             node.height == 1 + std::cmp::max(node.left_height(), node.right_height())
         }));
+    }
+
+    #[test]
+    fn traversal_order() {
+        let mut tree = AvlTree::new();
+        let mut expected = Vec::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            let num = rng.gen::<u32>();
+            tree.insert(num);
+            expected.push(num);
+        }
+        assert!(itertools::equal(expected.iter().sorted(), tree.iter()));
+    }
+
+    #[test]
+    fn balanced_nodes() {
+        let mut tree = AvlTree::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            tree.insert(rng.gen::<u32>());
+        }
+        assert!(itertools::all(tree.node_iter(), |node| node.balance_factor().abs() < 2));
+    }
+
+    #[test]
+    fn contains_parity() {
+        let mut tree = AvlTree::new();
+        let mut expected = BTreeSet::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            let num = rng.gen::<u32>();
+            tree.insert(num);
+            expected.insert(num);
+        }
+        assert!(itertools::all(expected.iter(), |value| tree.contains(value) == expected.contains(value)))
     }
 }
