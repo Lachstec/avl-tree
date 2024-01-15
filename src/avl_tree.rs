@@ -1,14 +1,16 @@
 #![allow(dead_code)]
 use std::cmp::Ordering;
+use std::fmt::Display;
 use std::ptr::NonNull;
 use std::mem;
 use std::default::Default;
-use graphviz_rust::dot_generator::*;
+use std::collections::VecDeque;
 use graphviz_rust::dot_structures::*;
+use graphviz_rust::printer::{DotPrinter, PrinterContext};
 
 /// Represents a single node in an avl tree
 #[derive(Debug, Clone, PartialEq)]
-pub struct AvlNode<T: Ord> {
+pub struct AvlNode<T: Ord + Display> {
     /// value stored in the node
     value: T,
     /// left subtree connected to this node
@@ -19,7 +21,7 @@ pub struct AvlNode<T: Ord> {
     height: usize,
 }
 
-impl<T: Ord> AvlNode<T> {
+impl<T: Ord + Display> AvlNode<T> {
     /// Retrieves the height of the left subtree if it exists, else returns 0.
     fn left_height(&self) -> usize {
         self.left.as_ref().map_or(0, |left| unsafe { (*left.as_ptr()).height })
@@ -145,11 +147,11 @@ type Link<T> = Option<NonNull<AvlNode<T>>>;
 
 /// Generic AvlTree implementation that permits no duplicate entries.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AvlTree<T: Ord> {
+pub struct AvlTree<T: Ord + Display> {
     root: Link<T>,
 }
 
-impl<T: Ord> AvlTree<T> {
+impl<T: Ord + Display> AvlTree<T> {
     /// Create a new AvlTree instance
     pub fn new() -> Self {
         Self {
@@ -219,13 +221,10 @@ impl<T: Ord> AvlTree<T> {
         self.iter().count()
     }
 
-    /// Return a graphviz dotfile representation of the AvlTree.
-    pub fn as_dotfile(&self) -> String {
-        todo!()
-    }
+    
 }
 
-impl<'a, T: Ord + 'a> AvlTree<T> {
+impl<'a, T: Ord + Display + 'a> AvlTree<T> {
     /// Returns an iterator over the borrowed values in the tree. 
     /// The iterator performs an in-order depth traversal of the tree.
     pub fn iter(&'a self) -> impl Iterator<Item = &'a T> + 'a {
@@ -242,7 +241,7 @@ impl<'a, T: Ord + 'a> AvlTree<T> {
     }
 }
 
-impl<T: Ord> Drop for AvlTree<T> {
+impl<T: Ord + Display> Drop for AvlTree<T> {
     fn drop(&mut self) {
         if self.root.is_none() {
             return;
@@ -271,7 +270,7 @@ impl<T: Ord> Drop for AvlTree<T> {
     }
 }
 
-impl<T: Ord> Default for AvlTree<T> {
+impl<T: Ord + Display> Default for AvlTree<T> {
     fn default() -> Self {
         Self {
             root: None,
@@ -279,17 +278,17 @@ impl<T: Ord> Default for AvlTree<T> {
     }
 }
 
-pub struct Iter<'a, T: Ord> {
+pub struct Iter<'a, T: Ord + Display> {
     prev_nodes: Vec<&'a AvlNode<T>>,
     current_tree: &'a Link<T>,
 }
 
-pub struct NodeIter<'a, T: Ord> {
+pub struct NodeIter<'a, T: Ord + Display> {
     prev_nodes: Vec<&'a AvlNode<T>>,
     current_tree: &'a Link<T>,
 }
 
-impl<'a, T: Ord + 'a> Iterator for NodeIter<'a, T> {
+impl<'a, T: Ord + Display + 'a> Iterator for NodeIter<'a, T> {
     type Item = &'a AvlNode<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -323,7 +322,7 @@ impl<'a, T: Ord + 'a> Iterator for NodeIter<'a, T> {
     }
 }
 
-impl<'a, T: Ord + 'a> Iterator for Iter<'a, T> {
+impl<'a, T: Ord + Display + 'a> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -357,7 +356,7 @@ impl<'a, T: Ord + 'a> Iterator for Iter<'a, T> {
     }
 }
 
-impl<T: Ord> FromIterator<T> for AvlTree<T> {
+impl<T: Ord + Display> FromIterator<T> for AvlTree<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut tree = Self::new();
         for value in iter {
