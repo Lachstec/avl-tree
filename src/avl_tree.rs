@@ -211,6 +211,11 @@ impl<T: Ord> AvlTree<T> {
         }
         false
     }
+
+    /// Return the number of elements in the AvlTree.
+    pub fn len(&self) -> usize {
+        self.iter().count()
+    }
 }
 
 impl<'a, T: Ord + 'a> AvlTree<T> {
@@ -421,5 +426,15 @@ mod avl_tree_tests {
             expected.insert(num);
         }
         assert!(itertools::all(expected.iter(), |value| tree.contains(value) == expected.contains(value)))
+    }
+
+    #[test]
+    fn tree_length() {
+        let mut tree = AvlTree::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            tree.insert(rng.gen::<u32>());
+        }
+        assert_eq!(1000, tree.len())
     }
 }
