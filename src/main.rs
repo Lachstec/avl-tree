@@ -1,13 +1,10 @@
 use avl_tree::AvlTree;
 use clap::{Parser, ValueEnum};
+use graphviz_rust::{cmd::Format, exec_dot};
 use std::env;
-use std::{path, fs::File};
 use std::io::Write;
 use std::process::ExitCode;
-use graphviz_rust::{
-    cmd::Format,
-    exec_dot
-};
+use std::{fs::File, path};
 
 mod avl_tree;
 
@@ -37,12 +34,16 @@ pub enum OutputType {
 }
 
 /// Generates outputfiles based on the dotfiles that are passed and writes them to the given Path.
-/// 
+///
 /// ## Arguments
 /// - `filetype` The filetype to generate, for possible values, see [`OutputType`].
 /// - `dotfiles` Vec containing the dotfiles to process.
 /// - `path` The path where the output files should be written to.
-fn generate_files(filetype: OutputType, dotfiles: Vec<String>, path: path::PathBuf) -> std::io::Result<()> {
+fn generate_files(
+    filetype: OutputType,
+    dotfiles: Vec<String>,
+    path: path::PathBuf,
+) -> std::io::Result<()> {
     match filetype {
         OutputType::Dotfile => {
             for (index, dotfile) in dotfiles.into_iter().enumerate() {
@@ -51,7 +52,7 @@ fn generate_files(filetype: OutputType, dotfiles: Vec<String>, path: path::PathB
                 let mut file = File::create(p)?;
                 file.write_all(&dotfile.as_bytes())?;
             }
-        },
+        }
         _ => {
             let (format, ext) = match filetype {
                 OutputType::Pdf | OutputType::Dotfile => (Format::Pdf, "pdf"),
@@ -83,16 +84,17 @@ fn main() -> ExitCode {
             t.insert(value);
             dotfiles.insert(index, t.as_dotfile().unwrap_or(String::from("")));
         }
-        
     } else {
-        let t: AvlTree<i32> = args.values
-            .into_iter()
-            .collect();
+        let t: AvlTree<i32> = args.values.into_iter().collect();
         dotfiles.insert(0, t.as_dotfile().unwrap_or(String::from("")));
     };
 
-    match generate_files(args.filetype, dotfiles, args.output_directory.unwrap_or(env::current_dir().unwrap())) {
-        Ok(()) => {},
+    match generate_files(
+        args.filetype,
+        dotfiles,
+        args.output_directory.unwrap_or(env::current_dir().unwrap()),
+    ) {
+        Ok(()) => {}
         Err(_) => return ExitCode::FAILURE,
     }
 

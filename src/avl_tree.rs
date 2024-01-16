@@ -1,12 +1,12 @@
 #![allow(dead_code)]
-use std::cmp::Ordering;
-use std::fmt::Display;
-use std::ptr::NonNull;
-use std::mem;
-use std::default::Default;
-use std::collections::VecDeque;
 use graphviz_rust::dot_structures::*;
 use graphviz_rust::printer::{DotPrinter, PrinterContext};
+use std::cmp::Ordering;
+use std::collections::VecDeque;
+use std::default::Default;
+use std::fmt::Display;
+use std::mem;
+use std::ptr::NonNull;
 
 /// Represents a single node in an avl tree
 #[derive(Debug, Clone, PartialEq)]
@@ -24,15 +24,19 @@ pub struct AvlNode<T: Ord + Display> {
 impl<T: Ord + Display> AvlNode<T> {
     /// Retrieves the height of the left subtree if it exists, else returns 0.
     fn left_height(&self) -> usize {
-        self.left.as_ref().map_or(0, |left| unsafe { (*left.as_ptr()).height })
+        self.left
+            .as_ref()
+            .map_or(0, |left| unsafe { (*left.as_ptr()).height })
     }
 
     /// Retrieves the height of the right subtree if it exists, else returns 0.
     fn right_height(&self) -> usize {
-        self.right.as_ref().map_or(0, |right| unsafe { (*right.as_ptr()).height })
+        self.right
+            .as_ref()
+            .map_or(0, |right| unsafe { (*right.as_ptr()).height })
     }
 
-    /// Updates the height of a node by setting it equal to 1 + the greater height of 
+    /// Updates the height of a node by setting it equal to 1 + the greater height of
     /// its children.
     fn update_height(&mut self) {
         self.height = 1 + std::cmp::max(self.left_height(), self.right_height())
@@ -49,7 +53,7 @@ impl<T: Ord + Display> AvlNode<T> {
             -((right_height - left_height) as i8)
         }
     }
- 
+
     /// Performs a right rotation of the current node and its children as specified for avl trees.
     fn rotate_right(&mut self) -> bool {
         let left_node = match &self.left {
@@ -60,7 +64,10 @@ impl<T: Ord + Display> AvlNode<T> {
             let left_right_subtree = (*left_node.as_ptr()).right.take();
             let left_left_subtree = (*left_node.as_ptr()).left.take();
             let mut new_right_subtree = mem::replace(&mut self.left, left_left_subtree);
-            mem::swap(&mut self.value, &mut (*new_right_subtree.as_mut().unwrap().as_ptr()).value);
+            mem::swap(
+                &mut self.value,
+                &mut (*new_right_subtree.as_mut().unwrap().as_ptr()).value,
+            );
             let right_tree = self.right.take();
 
             let new_right_node = new_right_subtree.as_mut().unwrap();
@@ -89,7 +96,10 @@ impl<T: Ord + Display> AvlNode<T> {
             let right_right_tree = (*right_node.as_ptr()).right.take();
 
             let mut new_left_tree = mem::replace(&mut self.right, right_right_tree);
-            mem::swap(&mut self.value, &mut (*new_left_tree.as_mut().unwrap().as_ptr()).value); 
+            mem::swap(
+                &mut self.value,
+                &mut (*new_left_tree.as_mut().unwrap().as_ptr()).value,
+            );
             let left_tree = self.left.take();
 
             let new_left_node = *new_left_tree.as_mut().unwrap();
@@ -112,7 +122,7 @@ impl<T: Ord + Display> AvlNode<T> {
             -2 => {
                 // currently node is right-heavy
                 let right_node = *self.right.as_mut().unwrap();
-                
+
                 unsafe {
                     // inner node is currently left-heavy
                     if (*right_node.as_ptr()).balance_factor() == 1 {
@@ -122,7 +132,7 @@ impl<T: Ord + Display> AvlNode<T> {
 
                 self.rotate_left();
                 true
-            },
+            }
             2 => {
                 // currently node is left-heavy
                 let left_node = *self.left.as_mut().unwrap();
@@ -136,8 +146,8 @@ impl<T: Ord + Display> AvlNode<T> {
                 self.rotate_right();
 
                 true
-            },
-            _ => false
+            }
+            _ => false,
         }
     }
 }
@@ -154,19 +164,17 @@ pub struct AvlTree<T: Ord + Display> {
 impl<T: Ord + Display> AvlTree<T> {
     /// Create a new AvlTree instance
     pub fn new() -> Self {
-        Self {
-            root: None,
-        }
+        Self { root: None }
     }
 
     /// Try to insert the value into the tree. Returns true on success, else false.
-    /// 
+    ///
     /// ## Arguments
     /// * `value` - Value to insert into the tree
     pub fn insert(&mut self, value: T) -> bool {
         let mut current_tree = &mut self.root;
         let mut prev_ptrs = Vec::<*mut AvlNode<T>>::new();
-        unsafe  {
+        unsafe {
             while let Some(current_node) = current_tree {
                 prev_ptrs.push(current_node.as_ptr());
                 match (*current_node.as_ptr()).value.cmp(&value) {
@@ -197,7 +205,7 @@ impl<T: Ord + Display> AvlTree<T> {
     }
 
     /// Checks if the AvlTree contains the value T.
-    /// 
+    ///
     /// ## Arguments
     /// * `value` The value to check
     /// ## Returns
@@ -225,63 +233,61 @@ impl<T: Ord + Display> AvlTree<T> {
     pub fn as_dotfile(&self) -> Option<String> {
         if self.root.is_some() {
             unsafe {
-                let mut graph = Graph::DiGraph { id: Id::Plain(String::from("AVL_Tree")), strict: true, stmts: Vec::new() };
+                let mut graph = Graph::DiGraph {
+                    id: Id::Plain(String::from("AVL_Tree")),
+                    strict: true,
+                    stmts: Vec::new(),
+                };
                 let mut queue = VecDeque::new();
                 queue.push_back(self.root.unwrap());
                 while !queue.is_empty() {
                     let node = queue.pop_front().unwrap();
-                    graph.add_stmt(
-                        Stmt::Node(
-                            Node::new(NodeId { 0: Id::Plain((*node.as_ptr()).value.to_string()), 1: None}, Vec::new())
-                        )
-                    );
+                    graph.add_stmt(Stmt::Node(Node::new(
+                        NodeId {
+                            0: Id::Plain((*node.as_ptr()).value.to_string()),
+                            1: None,
+                        },
+                        Vec::new(),
+                    )));
                     if (*node.as_ptr()).left.is_some() {
                         queue.push_back((*node.as_ptr()).left.unwrap());
-                        graph.add_stmt(
-                            Stmt::Edge(
-                                Edge { 
-                                    ty: EdgeTy::Pair(
-                                        Vertex::N(
-                                            NodeId {
-                                               0: Id::Plain((*node.as_ptr()).value.to_string()),
-                                               1: None,
-                                            }
-                                        ),
-                                        Vertex::N(
-                                            NodeId {
-                                               0: Id::Plain((*(*node.as_ptr()).left.unwrap().as_ptr()).value.to_string()),
-                                               1: None,
-                                            }
-                                        ),
-                                    ), 
-                                    attributes: Vec::new()
-                                }
-                            )
-                        );
+                        graph.add_stmt(Stmt::Edge(Edge {
+                            ty: EdgeTy::Pair(
+                                Vertex::N(NodeId {
+                                    0: Id::Plain((*node.as_ptr()).value.to_string()),
+                                    1: None,
+                                }),
+                                Vertex::N(NodeId {
+                                    0: Id::Plain(
+                                        (*(*node.as_ptr()).left.unwrap().as_ptr())
+                                            .value
+                                            .to_string(),
+                                    ),
+                                    1: None,
+                                }),
+                            ),
+                            attributes: Vec::new(),
+                        }));
                     }
                     if (*node.as_ptr()).right.is_some() {
                         queue.push_back((*node.as_ptr()).right.unwrap());
-                        graph.add_stmt(
-                            Stmt::Edge(
-                                Edge { 
-                                    ty: EdgeTy::Pair(
-                                        Vertex::N(
-                                            NodeId {
-                                               0: Id::Plain((*node.as_ptr()).value.to_string()),
-                                               1: None,
-                                            }
-                                        ),
-                                        Vertex::N(
-                                            NodeId {
-                                               0: Id::Plain((*(*node.as_ptr()).right.unwrap().as_ptr()).value.to_string()),
-                                               1: None,
-                                            }
-                                        ),
-                                    ), 
-                                    attributes: Vec::new()
-                                }
-                            )
-                        );
+                        graph.add_stmt(Stmt::Edge(Edge {
+                            ty: EdgeTy::Pair(
+                                Vertex::N(NodeId {
+                                    0: Id::Plain((*node.as_ptr()).value.to_string()),
+                                    1: None,
+                                }),
+                                Vertex::N(NodeId {
+                                    0: Id::Plain(
+                                        (*(*node.as_ptr()).right.unwrap().as_ptr())
+                                            .value
+                                            .to_string(),
+                                    ),
+                                    1: None,
+                                }),
+                            ),
+                            attributes: Vec::new(),
+                        }));
                     }
                 }
                 Some(graph.print(&mut PrinterContext::default()))
@@ -293,7 +299,7 @@ impl<T: Ord + Display> AvlTree<T> {
 }
 
 impl<'a, T: Ord + Display + 'a> AvlTree<T> {
-    /// Returns an iterator over the borrowed values in the tree. 
+    /// Returns an iterator over the borrowed values in the tree.
     /// The iterator performs an in-order depth traversal of the tree.
     pub fn iter(&'a self) -> impl Iterator<Item = &'a T> + 'a {
         self.node_iter().map(|node| &node.value)
@@ -333,16 +339,16 @@ impl<T: Ord + Display> Drop for AvlTree<T> {
         }
 
         for node in nodes {
-            unsafe { let _box = Box::from_raw(node.as_ptr()); }
+            unsafe {
+                let _box = Box::from_raw(node.as_ptr());
+            }
         }
     }
 }
 
 impl<T: Ord + Display> Default for AvlTree<T> {
     fn default() -> Self {
-        Self {
-            root: None,
-        }
+        Self { root: None }
     }
 }
 
@@ -369,22 +375,20 @@ impl<'a, T: Ord + Display + 'a> Iterator for NodeIter<'a, T> {
                         return Some(&prev_node);
                     }
                 },
-                Some(ref current_node) => {
-                    unsafe {
-                        if (*current_node.as_ptr()).left.is_some() {
-                            self.prev_nodes.push(&(*current_node.as_ptr()));
-                            self.current_tree = &(*current_node.as_ptr()).left;
+                Some(ref current_node) => unsafe {
+                    if (*current_node.as_ptr()).left.is_some() {
+                        self.prev_nodes.push(&(*current_node.as_ptr()));
+                        self.current_tree = &(*current_node.as_ptr()).left;
 
-                            continue;
-                        }
-                        if (*current_node.as_ptr()).right.is_some() {
-                            self.current_tree = &(*current_node.as_ptr()).right;
-                            return Some(&(*current_node.as_ptr()));
-                        }
-                        self.current_tree = &None;
-                        return Some(&(*current_node.as_ptr()))
+                        continue;
                     }
-                }
+                    if (*current_node.as_ptr()).right.is_some() {
+                        self.current_tree = &(*current_node.as_ptr()).right;
+                        return Some(&(*current_node.as_ptr()));
+                    }
+                    self.current_tree = &None;
+                    return Some(&(*current_node.as_ptr()));
+                },
             }
         }
     }
@@ -403,22 +407,20 @@ impl<'a, T: Ord + Display + 'a> Iterator for Iter<'a, T> {
                         return Some(&prev_node.value);
                     }
                 },
-                Some(ref current_node) => {
-                    unsafe {
-                        if (*current_node.as_ptr()).left.is_some() {
-                            self.prev_nodes.push(&(*current_node.as_ptr()));
-                            self.current_tree = &(*current_node.as_ptr()).left;
+                Some(ref current_node) => unsafe {
+                    if (*current_node.as_ptr()).left.is_some() {
+                        self.prev_nodes.push(&(*current_node.as_ptr()));
+                        self.current_tree = &(*current_node.as_ptr()).left;
 
-                            continue;
-                        }
-                        if (*current_node.as_ptr()).right.is_some() {
-                            self.current_tree = &(*current_node.as_ptr()).right;
-                            return Some(&(*current_node.as_ptr()).value);
-                        }
-                        self.current_tree = &None;
-                        return Some(&(*current_node.as_ptr()).value)
+                        continue;
                     }
-                }
+                    if (*current_node.as_ptr()).right.is_some() {
+                        self.current_tree = &(*current_node.as_ptr()).right;
+                        return Some(&(*current_node.as_ptr()).value);
+                    }
+                    self.current_tree = &None;
+                    return Some(&(*current_node.as_ptr()).value);
+                },
             }
         }
     }
@@ -450,7 +452,7 @@ mod avl_tree_tests {
         tree.insert(1);
 
         for (expected, actual) in tree.iter().enumerate() {
-            assert_eq!(&((expected + 1) as i32 ), actual)
+            assert_eq!(&((expected + 1) as i32), actual)
         }
     }
 
@@ -486,7 +488,10 @@ mod avl_tree_tests {
         for _ in 0..1000 {
             tree.insert(rng.gen::<u32>());
         }
-        assert!(itertools::all(tree.node_iter(), |node| node.balance_factor().abs() < 2));
+        assert!(itertools::all(tree.node_iter(), |node| node
+            .balance_factor()
+            .abs()
+            < 2));
     }
 
     #[test]
@@ -499,7 +504,9 @@ mod avl_tree_tests {
             tree.insert(num);
             expected.insert(num);
         }
-        assert!(itertools::all(expected.iter(), |value| tree.contains(value) == expected.contains(value)))
+        assert!(itertools::all(expected.iter(), |value| tree
+            .contains(value)
+            == expected.contains(value)))
     }
 
     #[test]
