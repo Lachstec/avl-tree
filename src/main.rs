@@ -28,6 +28,7 @@ struct Args {
     filetype: OutputType,
 }
 
+/// The Filetype that should be generated from the trees dotfile.
 #[derive(Debug, Copy, Clone, ValueEnum)]
 pub enum OutputType {
     Svg,
@@ -35,6 +36,12 @@ pub enum OutputType {
     Pdf,
 }
 
+/// Generates outputfiles based on the dotfiles that are passed and writes them to the given Path.
+/// 
+/// ## Arguments
+/// - `filetype` The filetype to generate, for possible values, see [`OutputType`].
+/// - `dotfiles` Vec containing the dotfiles to process.
+/// - `path` The path where the output files should be written to.
 fn generate_files(filetype: OutputType, dotfiles: Vec<String>, path: path::PathBuf) -> std::io::Result<()> {
     match filetype {
         OutputType::Dotfile => {
