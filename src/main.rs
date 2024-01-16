@@ -32,6 +32,7 @@ struct Args {
 pub enum OutputType {
     Svg,
     Dotfile,
+    Pdf,
 }
 
 fn generate_files(filetype: OutputType, dotfiles: Vec<String>, path: path::PathBuf) -> std::io::Result<()> {
@@ -44,15 +45,18 @@ fn generate_files(filetype: OutputType, dotfiles: Vec<String>, path: path::PathB
                 file.write_all(&dotfile.as_bytes())?;
             }
         },
-        OutputType::Svg => {
-            let format = Format::Svg;
+        _ => {
+            let (format, ext) = match filetype {
+                OutputType::Pdf | OutputType::Dotfile => (Format::Pdf, "pdf"),
+                OutputType::Svg => (Format::Svg, "svg"),
+            };
             for (index, dotfile) in dotfiles.into_iter().enumerate() {
                 let svg = exec_dot(dotfile, vec![format.into()]);
                 match svg {
                     Err(e) => return Err(e),
                     Ok(s) => {
                         let mut p = path::PathBuf::from(path.clone());
-                        p.extend(&[format!("out-{}.svg", index)]);
+                        p.extend(&[format!("out-{}.{}", index, ext)]);
                         let mut file = File::create(p)?;
                         file.write_all(&s)?;
                     }
